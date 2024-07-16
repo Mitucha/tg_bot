@@ -12,6 +12,7 @@ const User = sequelize.define('user', {
 
 const Attestation = sequelize.define('attestation', {
     id: {type: DataTypes.INTEGER, primaryKey: true, unique: true, autoIncrement: true},
+    type_user: {type: DataTypes.STRING},
     label: {type: DataTypes.STRING},
     data: {type: DataTypes.TEXT}
 })

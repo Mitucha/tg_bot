@@ -2,26 +2,10 @@ require('dotenv').config()
 const sequelize = require('./db')
 const { UserModel, AttestationModel, ResultModel } = require('./models')
 const {Bot, InlineKeyboard} = require('grammy')
+const {cassir, cook} = require('./att')
 
-// Импровизированная база данных и переменные для счетчиков
-
-const attestationItems = [
-    {title: 'Аттестация Июня', data: 'qwerty', command: 'att1'},
-    {title: 'Аттестация Августа', data: 'qwerty', command: 'att2'}
-]
-
-function commandAtt(arr){
-    let result = []
-    for (let i = 0; i < arr.length; i++){
-        result.push(
-            {command: arr[i].command, description: arr[i].title}
-        )
-    }
-    return result
-}
-
-const db = [
-    {
+let attArray = [
+    /*{
       label: 'В какие блюда входит болгарский перец?',
       data: [
         'Шаурма мини и вегетарианская шаурма',
@@ -45,23 +29,18 @@ const db = [
         'сырная тортилья'
       ],
       sucs: 4
-    }
+    }*/
   ]
-let leng = 0
+let intermediateResult = []
 let cookies = 0 // Хардкодим Печеньки тут, чтобы, по окончанию теста, отправить их на сервер
 //==============================
 const bot = new Bot(process.env.BOT_API_KEY) //Подключение к боту
 
 //Необходимые пользовательские команды
 
-bot.api.setMyCommands(commandAtt(attestationItems))
-
-/*bot.api.setMyCommands([
-    {
-        command: 'attestation',
-        description: 'Пройти аттестацию'
-    }
-])*/
+bot.api.setMyCommands(
+    [{command: 'att', description: 'Пройти аттестацию'}]
+)
 
 // Подключение  к базе данных
 async function conectDB() {
@@ -81,15 +60,18 @@ bot.command('start', async stx => {
     await stx.reply("Напиши свое Имя и Фамилию")
 })
 // Определяем по выбору пользователя, кем он является в команде
-async function sequenceOfQuestions(ctx, num){
-    
-    const context = db[num]
+
+async function sequenceOfQuestions(ctx, objOfArray){
+    if(objOfArray == undefined){
+        ctx.reply('Вы уже прошли аттестацию')
+        return
+    }
     const inlineKeyboard = new InlineKeyboard()
-    .text(context.data[0], isDone(1, context.sucs)).row()
-    .text(context.data[1], isDone(2, context.sucs)).row()
-    .text(context.data[2], isDone(3, context.sucs)).row()
-    .text(context.data[3], isDone(4, context.sucs))
-    await ctx.reply(context.label, {reply_markup: inlineKeyboard})
+    .text(objOfArray.data[0], isDone(1, objOfArray.sucs)).row()
+    .text(objOfArray.data[1], isDone(2, objOfArray.sucs)).row()
+    .text(objOfArray.data[2], isDone(3, objOfArray.sucs)).row()
+    .text(objOfArray.data[3], isDone(4, objOfArray.sucs))
+    await ctx.reply(objOfArray.label, {reply_markup: inlineKeyboard})
 }
 
 // Функция для определения правильного варианта ответа на вопрос теста
@@ -102,52 +84,78 @@ function isDone(number, doneNum){
 
 // Вызов теста
 bot.callbackQuery('button-1', async ctx => {
-    sequenceOfQuestions(ctx, leng++)
-    //const inlineKeyboard = new InlineKeyboard().text('14см', 'button-3').row().text('15см', 'button-4')
-    //await ctx.reply('Какой длины у вас член? ', {reply_markup: inlineKeyboard})
+    attArray = cassir
+    sequenceOfQuestions(ctx, attArray.shift())
+    
 })
 
 // Обработчик не верного ответа пользователя
 bot.callbackQuery(['notDone'], async ctx => {
-    if(leng == db.length){
+    if(attArray.length == 0){
         try{
-            //const User = await UserModel.findOne({where: {telegramm_id: ctx.from.id}})
-            //User.cookies = cookies
-            //await User.save()
-            //await ctx.reply(`Ты заработал ${User.cookies}🍪`)
-            leng = 0
-            await ctx.reply(`Ты заработал ${cookies}🍪`)
+            intermediateResult.push(20 - attArray.length)
+            const User = await UserModel.findOne({where: {telegramm_id: JSON.stringify(ctx.from.id)}})
+            if(User.cookies > 0) User.cookies += cookies
+            else{User.cookies = cookies}
+            await User.save()
+
+
+
+            await ResultModel.create({
+                id_user: User.id,
+                attestation_id: 1,
+                result: JSON.stringify(intermediateResult)
+            })
+
+            await ctx.reply(`Ты заработал ${User.cookies}🍪`)
             cookies = 0
         } catch(e){console.error(e)}
         
-    }else{sequenceOfQuestions(ctx, leng++)}
+    }else{
+        intermediateResult.push(20 - attArray.length)
+        sequenceOfQuestions(ctx, attArray.shift())}
     
 })
 
 // Обработчик верного ответа пользователя
 bot.callbackQuery('done', async ctx => {
     cookies++
-    if(leng == db.length){
-        //const User = await UserModel.findOne({where: {telegramm_id: ctx.from.id}})
-        //User.cookies = cookies
-        //await User.save()
-        //await ctx.reply(`Ты заработал ${User.cookies}🍪`)
-        leng = 0
-        await ctx.reply(`Ты заработал ${cookies}🍪`)
-        cookies = 0
-    } else{sequenceOfQuestions(ctx, leng++)}
+    if(attArray.length == 0){
+        try{
+            const User = await UserModel.findOne({where: {telegramm_id: JSON.stringify(ctx.from.id)}})
+            if(User.cookies > 0) User.cookies += cookies
+            else{User.cookies = cookies}
+            await User.save()
+
+            await ResultModel.create({
+                id_user: User.id,
+                attestation_id: 1,
+                result: JSON.stringify(intermediateResult)
+            })
+
+            await ctx.reply(`Ты заработал ${cookies}🍪`)
+            cookies = 0
+        } catch(e){console.log(e)}
+    } else{sequenceOfQuestions(ctx, attArray.shift())}
 })
 
 bot.callbackQuery('button-2', async ctx => {
-    sequenceOfQuestions(ctx, leng++)
+    attArray = cook
+    sequenceOfQuestions(ctx, attArray.shift())
 })
 
-bot.callbackQuery('add_attestation', async ctx => {
-    ctx.reply('Я жду список')
+bot.callbackQuery('result_users', async ctx => {
+    Res = await ResultModel.findAll()
+    for(const i in Res){
+        const name = await UserModel.findOne({where: {id: Res[i].id_user}})
+        ctx.reply(`Сотрудник: ${name.name},
+        № Аттестации: ${Res[i].attestation_id}
+        Ошибки: ${Res[i].result}`)
+    }
 })
 //==============================================================
 
-bot.command('attestation', async (ctx) => {
+bot.command('att', async (ctx) => {
     const inlineKeyboard = new InlineKeyboard().text('Кассир', 'button-1').text('Повар', 'button-2')
     await ctx.reply('Выберите свою позицию ', {reply_markup: inlineKeyboard})
 })
@@ -161,9 +169,9 @@ bot.on("message", async (ctx) => {
     })
 
     // Проверка на права администратора
-    if(ctx.from.id === 556854769 || ctx.from.id === 366486108) {
+    if(ctx.from.id === 556854769 || ctx.from.id === 66486108) {
         await ctx.reply("Здравствуй, администратор")
-        const inlineKeyboard = new InlineKeyboard().text('Добавить аттестацию', 'add_attestation').row().text('Результаты пользователей')
+        const inlineKeyboard = new InlineKeyboard().text('Результаты пользователей', 'result_users')
         await ctx.reply('Какие будут действия?', {reply_markup: inlineKeyboard})
         return
     }
@@ -181,12 +189,20 @@ bot.on("message", async (ctx) => {
         await ctx.reply(`Вот мы и познакомились, ${ctx.message.text}`)
 
     } else{
-        //await ctx.reply(`Мы уже знакомы, ${registredUser.name}. У тебя ${cookies} 🍪.`)
-        
-        await ctx.reply(registredUser)
+        await ctx.reply(`Мы уже знакомы, ${registredUser.name}. У тебя ${registredUser.cookies} 🍪.`)
     }
     
     
   });
 
 bot.start()
+
+// В model.js добавить ключи к аттестации type_user ++++++++++++++++++++++++++++++++++
+// Стереть существующую бд на хосте
+// Подключить новую бд
+// Подготовить аттестации +++++++++++++++++++++++++++++
+// Добавить атестации в бд
+// Переписать функцию прохождения аттестации так, чтобы в зависимости от type_user менялись тесты пользователя
+
+// Сохранять прогресс пользователя (если тест был пройден, то он его перепройти не может), потому добавить ключ к пользователю, который не даст пройти пройденный тест
+// Вывод результатов для администратора
