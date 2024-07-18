@@ -177,10 +177,10 @@ bot.on("message", async (ctx) => {
     }
 
     // Пользователь новый или старый. Алгоритм действий
-    if(registredUser === null) {
+    if(registredUser === null || registredUser === undefined) {
         await UserModel.create({
-            chatId: JSON.stringify(ctx.message.chat.id),
-            name: ctx.message.text,
+            chatId: parseInt(ctx.message.chat.id),
+            name: JSON.stringify(ctx.message.text),
             telegramm_id: JSON.stringify(ctx.message.from.id),
             compliteAtt: 0,
             cookies: 0
@@ -189,7 +189,7 @@ bot.on("message", async (ctx) => {
         await ctx.reply(`Вот мы и познакомились, ${ctx.message.text}`)
 
     } else{
-        await ctx.reply(`Мы уже знакомы, ${registredUser.name}. У тебя ${registredUser.cookies} 🍪.`)
+        await ctx.reply(`У тебя ${registredUser.cookies} 🍪.`)
     }
     
     
