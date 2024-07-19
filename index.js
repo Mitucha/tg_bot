@@ -74,6 +74,13 @@ async function sequenceOfQuestions(ctx, objOfArray){
     await ctx.reply(objOfArray.label, {reply_markup: inlineKeyboard})
 }
 
+async function isRegistred(ctx){
+    const user = await UserModel.findOne({where: {telegramm_id: JSON.stringify(ctx.from.id)}})
+    if(!!user){
+        return true
+    } else{ return false }
+}
+
 // Функция для определения правильного варианта ответа на вопрос теста
 function isDone(number, doneNum){
     if(number === doneNum){
@@ -84,8 +91,10 @@ function isDone(number, doneNum){
 
 // Вызов теста
 bot.callbackQuery('button-1', async ctx => {
-    attArray = cassir
-    sequenceOfQuestions(ctx, attArray.shift())
+    if(await isRegistred(ctx) === true){
+        attArray = cassir
+        sequenceOfQuestions(ctx, attArray.shift())
+    } else{ await ctx.reply('Вы еще не указали свое Имя и Фамилию') }
     
 })
 
@@ -140,8 +149,10 @@ bot.callbackQuery('done', async ctx => {
 })
 
 bot.callbackQuery('button-2', async ctx => {
-    attArray = cook
-    sequenceOfQuestions(ctx, attArray.shift())
+    if(await isRegistred(ctx) === true){
+        attArray = cook
+        sequenceOfQuestions(ctx, attArray.shift())
+    } else{ await ctx.reply('Вы еще не указали свое Имя и Фамилию') }
 })
 
 bot.callbackQuery('result_users', async ctx => {
